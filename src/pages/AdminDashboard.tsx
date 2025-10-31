@@ -44,12 +44,23 @@ export default function AdminDashboard() {
   // Firestore'daki mevcut konfigürasyonu çek ve forma doldur
   useEffect(() => {
     const unsub = listenBannerConfig((cfg) => {
-      if (cfg.topBanner) setEditedTopBanner(cfg.topBanner);
-      if (cfg.leftBanner) setEditedLeftBanner(cfg.leftBanner);
-      if (cfg.banners) setEditedBanners(cfg.banners);
+      if (cfg.topBanner) {
+        setEditedTopBanner(cfg.topBanner);
+        updateTopBanner(cfg.topBanner.imageUrl, cfg.topBanner.link, cfg.topBanner.hidden);
+      }
+      if (cfg.leftBanner) {
+        setEditedLeftBanner(cfg.leftBanner);
+        updateSideBanner(cfg.leftBanner.id, cfg.leftBanner.imageUrl, cfg.leftBanner.link, cfg.leftBanner.hidden);
+      }
+      if (cfg.banners) {
+        setEditedBanners(cfg.banners);
+        cfg.banners.forEach(banner => {
+          updateBanner(banner.id, banner.imageUrl, banner.link, banner.hidden);
+        });
+      }
     });
     return () => unsub();
-  }, []);
+  }, [updateTopBanner, updateSideBanner, updateBanner]);
 
   const handleLogout = () => {
     sessionStorage.removeItem('adminAuth');
