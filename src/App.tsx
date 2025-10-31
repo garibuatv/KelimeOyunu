@@ -86,7 +86,6 @@ function MainContent() {
   // Global banner konfigürasyonunu dinle
   useEffect(() => {
     const unsub = listenBannerConfig((cfg) => {
-      setRemoteBanners({ topBanner: cfg.topBanner, leftBanner: cfg.leftBanner, banners: cfg.banners });
       if (cfg.topBanner) {
         updateTopBanner(cfg.topBanner.imageUrl, cfg.topBanner.link, cfg.topBanner.hidden);
       }
