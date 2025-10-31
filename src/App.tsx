@@ -13,8 +13,8 @@ function MainContent() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isCustomFullscreen, setIsCustomFullscreen] = useState(false);
   const playerContainerRef = useRef<HTMLDivElement>(null);
-  const { matches, banners, sideBanners, topBanner, settings } = useMatchStore();
-  const [remoteBanners, setRemoteBanners] = useState<null | { topBanner: any; leftBanner: any; banners: any[] }>(null);
+  const { matches, banners, sideBanners, topBanner, settings, updateTopBanner, updateSideBanner, updateBanner } = useMatchStore();
+
 
   // Fullscreen değişikliklerini izleme
   useEffect(() => {
@@ -87,9 +87,20 @@ function MainContent() {
   useEffect(() => {
     const unsub = listenBannerConfig((cfg) => {
       setRemoteBanners({ topBanner: cfg.topBanner, leftBanner: cfg.leftBanner, banners: cfg.banners });
+      if (cfg.topBanner) {
+        updateTopBanner(cfg.topBanner.imageUrl, cfg.topBanner.link, cfg.topBanner.hidden);
+      }
+      if (cfg.leftBanner) {
+        updateSideBanner(cfg.leftBanner.id, cfg.leftBanner.imageUrl, cfg.leftBanner.link, cfg.leftBanner.hidden);
+      }
+      if (cfg.banners) {
+        cfg.banners.forEach(banner => {
+          updateBanner(banner.id, banner.imageUrl, banner.link, banner.hidden);
+        });
+      }
     });
     return () => unsub();
-  }, []);
+  }, [updateTopBanner, updateSideBanner, updateBanner]);
 
   const loadMobileChannel = (channelId: string) => {
     // Sorun tespit için logging ekle
@@ -301,7 +312,7 @@ function MainContent() {
         {/* Top Banner */}
         <div className="mb-6 text-center">
           {(() => {
-            const tb = remoteBanners?.topBanner ?? topBanner;
+            const tb = topBanner;
             const img = tb?.imageUrl || '/%C3%BCstbanner.jpg';
             const link = tb?.link;
             if (tb?.hidden) return null;
@@ -319,7 +330,7 @@ function MainContent() {
           {/* Left Banner - Hidden on Mobile */}
           <div className="hidden md:block md:col-span-3">
             {(() => {
-              const lb = (remoteBanners?.leftBanner?.imageUrl ? remoteBanners.leftBanner : (sideBanners && sideBanners[0])) as any;
+              const lb = sideBanners && sideBanners[0];
               const img = lb?.imageUrl || '/SolBanner.jpg';
               const link = lb?.link;
               if (lb?.hidden) return null;
@@ -451,7 +462,7 @@ function MainContent() {
 
             {/* Bottom Banners - Flex on Mobile */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mt-6 banners-section banners-grid">
-              {(remoteBanners?.banners ?? banners).filter((b: any) => !b?.hidden).map((banner) => {
+              {banners.filter((b: any) => !b?.hidden).map((banner) => {
                 const commonClass = "w-full h-[140px] md:h-[193px] rounded-xl overflow-hidden shadow-lg transform hover:scale-[1.02] transition-transform";
                 const content = (
                   <img 
