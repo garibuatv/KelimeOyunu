@@ -1,0 +1,761 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Tv2, Calendar, Twitter, Layers } from 'lucide-react';
+import { useMatchStore } from './store/matchStore';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
+import AnnouncementSlider from './components/AnnouncementSlider';
+
+function MainContent() {
+  const [currentChannel, setCurrentChannel] = useState('yayinzirve');
+  const [activeChannels, setActiveChannels] = useState<string[]>([]);
+  const [isMultiScreen, setIsMultiScreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isCustomFullscreen, setIsCustomFullscreen] = useState(false);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const { matches, banners, sideBanners, topBanner, settings } = useMatchStore();
+
+  // Fullscreen değişikliklerini izleme
+  useEffect(() => {
+    const fullscreenChangeHandler = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener('fullscreenchange', fullscreenChangeHandler);
+    document.addEventListener('webkitfullscreenchange', fullscreenChangeHandler);
+    document.addEventListener('mozfullscreenchange', fullscreenChangeHandler);
+    document.addEventListener('MSFullscreenChange', fullscreenChangeHandler);
+
+    // Fullscreen API hook
+    const originalRequestFullscreen = Element.prototype.requestFullscreen;
+    const originalWebkitRequestFullscreen = (Element.prototype as any).webkitRequestFullscreen;
+    const originalMozRequestFullScreen = (Element.prototype as any).mozRequestFullScreen;
+    const originalMsRequestFullscreen = (Element.prototype as any).msRequestFullscreen;
+
+    if (originalRequestFullscreen) {
+      Element.prototype.requestFullscreen = function(this: Element) {
+        setIsFullscreen(true);
+        return originalRequestFullscreen.apply(this, arguments as any);
+      } as any;
+    }
+
+    if (originalWebkitRequestFullscreen) {
+      (Element.prototype as any).webkitRequestFullscreen = function(this: Element) {
+        setIsFullscreen(true);
+        return originalWebkitRequestFullscreen.apply(this, arguments as any);
+      };
+    }
+
+    if (originalMozRequestFullScreen) {
+      (Element.prototype as any).mozRequestFullScreen = function(this: Element) {
+        setIsFullscreen(true);
+        return originalMozRequestFullScreen.apply(this, arguments as any);
+      };
+    }
+
+    if (originalMsRequestFullscreen) {
+      (Element.prototype as any).msRequestFullscreen = function(this: Element) {
+        setIsFullscreen(true);
+        return originalMsRequestFullscreen.apply(this, arguments as any);
+      };
+    }
+
+    return () => {
+      document.removeEventListener('fullscreenchange', fullscreenChangeHandler);
+      document.removeEventListener('webkitfullscreenchange', fullscreenChangeHandler);
+      document.removeEventListener('mozfullscreenchange', fullscreenChangeHandler);
+      document.removeEventListener('MSFullscreenChange', fullscreenChangeHandler);
+
+      // Restore original methods
+      if (originalRequestFullscreen) {
+        Element.prototype.requestFullscreen = originalRequestFullscreen;
+      }
+      if (originalWebkitRequestFullscreen) {
+        (Element.prototype as any).webkitRequestFullscreen = originalWebkitRequestFullscreen;
+      }
+      if (originalMozRequestFullScreen) {
+        (Element.prototype as any).mozRequestFullScreen = originalMozRequestFullScreen;
+      }
+      if (originalMsRequestFullscreen) {
+        (Element.prototype as any).msRequestFullscreen = originalMsRequestFullscreen;
+      }
+    };
+  }, []);
+
+  const loadMobileChannel = (channelId: string) => {
+    // Sorun tespit için logging ekle
+    console.log("Maç kanalı tıklandı:", channelId);
+    
+    // Boş channel ID kontrolü
+    if (!channelId || channelId.trim() === '') {
+      console.warn('Geçersiz kanal ID:', channelId);
+      return;
+    }
+    
+    // Özel durum - channelId'nin 'yayinzirve' olduğu durum için özel kontrol
+    // Bu, Eyüpspor - Adana Demirspor maçının kanal ID'si
+    if (channelId === 'yayinzirve' && isMultiScreen && !activeChannels.includes(channelId)) {
+      console.log("yayinzirve kanalı eklenecek");
+      
+      // Maksimum 3 kanal kontrolü
+      if (activeChannels.length >= 3) {
+        const updatedChannels = [...activeChannels];
+        updatedChannels.pop();
+        setActiveChannels([channelId, ...updatedChannels]);
+      } else {
+        setActiveChannels([channelId, ...activeChannels]);
+      }
+      return;
+    }
+    
+    if (isMultiScreen) {
+      if (activeChannels.includes(channelId)) {
+        // Kanal zaten aktifse, listeden çıkar
+        setActiveChannels(activeChannels.filter(ch => ch !== channelId));
+      } else {
+        // Maksimum 3 kanal kontrolü
+        if (activeChannels.length >= 3) {
+          // Eğer 3 kanal zaten seçiliyse, son eklenen kanalı çıkar ve yeni kanalı ekle
+          const updatedChannels = [...activeChannels];
+          updatedChannels.pop(); // Son eklenen kanalı çıkar
+          setActiveChannels([channelId, ...updatedChannels]);
+        } else {
+          // 3'ten az kanal varsa, yeni kanalı ekle
+          setActiveChannels([channelId, ...activeChannels]);
+        }
+      }
+    } else {
+      setCurrentChannel(channelId);
+    }
+    
+    // Konsola log ekle
+    console.log('Aktif kanallar:', isMultiScreen ? [...activeChannels, channelId] : [channelId]);
+  };
+
+  const toggleMultiScreen = () => {
+    if (!isMultiScreen) {
+      setActiveChannels([currentChannel]);
+      setIsMultiScreen(true);
+    } else {
+      if (activeChannels.length > 0) {
+        setCurrentChannel(activeChannels[0]);
+      }
+      setActiveChannels([]);
+      setIsMultiScreen(false);
+    }
+  };
+
+  const toggleCustomFullscreen = () => {
+    if (!playerContainerRef.current) return;
+    
+    setIsCustomFullscreen(!isCustomFullscreen);
+    
+    if (!isCustomFullscreen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+  };
+
+  const getPlayerUrl = (channelId: string) => {
+    if (settings.videoPlayerUrl) {
+      return `${settings.videoPlayerUrl}?id=${channelId}`;
+    }
+    return `https://${settings.streamDomain}/channel?id=${channelId}`;
+  };
+
+  return (
+    <div className="min-h-screen" style={{
+      backgroundImage: 'url("/Background3.jpg")',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      backgroundAttachment: 'fixed'
+    }}>
+      {/* Header */}
+      <header className="sticky top-0 z-50 header-container" style={{
+        backgroundColor: 'rgba(13, 15, 29, 0.5)',
+        backdropFilter: 'blur(5px)'
+      }}>
+        <div className="container mx-auto px-4 py-3">
+          {/* Üst Sıra: Logo, Sosyal/İletişim ve Slider (Desktop) */}
+          <div className="hidden md:flex items-center gap-6">
+            {/* Sol Taraf: Logo, Sosyal, İletişim */}
+            <div className="flex items-center flex-shrink-0 gap-6">
+              {/* Logo */}
+              <div className="flex items-center gap-2">
+                <img 
+                  src="https://i.imgur.com/SFicHwK.png" 
+                  alt="Logo" 
+                  className="header-logo h-12 cursor-pointer" 
+                  style={{ height: "34px" }} 
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                />
+              </div>
+              {/* Social and Contact Buttons */}
+              <div className="flex items-center gap-4">
+                <a 
+                  href="https://x.com/rabonatvhd"
+                  target="_blank"
+                  rel="noopener noreferrer" 
+                  className="text-gray-400 hover:text-purple-500 transition-all transform hover:scale-110"
+                >
+                  <div className="h-9 w-9">
+                    <img src="/x.png" alt="X (Twitter) Logo" className="h-full w-full" />
+                  </div>
+                </a>
+                <a 
+                  href="https://t.me/rabonatvdeyiz"
+                  target="_blank"
+                  rel="noopener noreferrer" 
+                  className="text-gray-400 hover:text-blue-500 transition-all transform hover:scale-110"
+                >
+                  <div className="h-9 w-9">
+                    <img src="/telegramm.png" alt="Telegram Logo" className="h-full w-full" />
+                  </div>
+                </a>
+                <a 
+                  href="https://t.me/rabonahd"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-transparent hover:bg-black/20 px-4 md:px-5 py-2 rounded-full text-sm font-medium transition-all border border-gray-500 whitespace-nowrap"
+                >
+                  <span className="blink-text">Reklam ve İletişim</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Sağ Taraf: AnnouncementSlider (Desktop) */}
+            <div className="flex-grow min-w-0">
+              <AnnouncementSlider />
+            </div>
+          </div>
+
+          {/* Mobil Görünüm: Logo Ortada, Altında Butonlar ve Slider */}
+          <div className="md:hidden flex flex-col items-center gap-3">
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              <img 
+                src="https://i.imgur.com/SFicHwK.png" 
+                alt="Logo" 
+                className="header-logo h-12 cursor-pointer" 
+                style={{ height: "34px" }} 
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              />
+            </div>
+            {/* Social and Contact Buttons */}
+            <div className="flex items-center gap-4">
+              <a 
+                href="https://x.com/rabonatvhd"
+                target="_blank"
+                rel="noopener noreferrer" 
+                className="text-gray-400 hover:text-purple-500 transition-all transform hover:scale-110"
+              >
+                <div className="h-9 w-9">
+                  <img src="/x.png" alt="X (Twitter) Logo" className="h-full w-full" />
+                </div>
+              </a>
+              {/* Telegram ikonu eklendi (Mobil) */}
+              <a 
+                href="https://t.me/rabonatvdeyiz"
+                target="_blank"
+                rel="noopener noreferrer" 
+                className="text-gray-400 hover:text-blue-500 transition-all transform hover:scale-110"
+              >
+                <div className="h-9 w-9">
+                  <img src="/telegramm.png" alt="Telegram Logo" className="h-full w-full" />
+                </div>
+              </a>
+              <a 
+                href="https://t.me/rabonahd"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-transparent hover:bg-black/20 px-4 py-2 rounded-full text-sm font-medium transition-all border border-gray-500 whitespace-nowrap"
+              >
+                <span className="blink-text">Reklam ve İletişim</span>
+              </a>
+            </div>
+            {/* Slider (Mobil) */}
+            <div className="w-full mt-2">
+              <AnnouncementSlider />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-6 relative">
+        {/* Top Banner */}
+        <div className="mb-6 text-center">
+          <a href="https://superbetin1359.com/bonuslar/ilk-uyelik-bonusu?btag=a_4447b_709c_&affid=20400" target="_blank" rel="noopener noreferrer">
+            <img className="w-full rounded-lg cursor-pointer" src="https://www.dzy2.site/resim/superbetin1000x50v8.gif" alt="Top Banner" />
+          </a>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* Side Banners - Hidden on Mobile */}
+          <div className="hidden md:flex md:col-span-3 flex-col gap-4 side-banners-container">
+            <div 
+              className="rounded-xl overflow-hidden p-4"
+              style={{
+                backgroundColor: 'rgba(13, 15, 29, 0.5)',
+                backdropFilter: 'blur(10px)'
+              }}
+            >
+              <h3 className="text-center font-bold holographic-text text-xl mb-4">Güvenilir Bahis Siteleri</h3>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-purple-500/30">
+                    <th className="py-2 text-center text-white w-1/3"></th>
+                    <th className="py-2 text-center text-white w-1/3"></th>
+                    <th className="py-2 text-center text-white w-1/3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-purple-500/20">
+                    <td className="py-2 text-center">
+                      <div className="flex justify-center">
+                        <img 
+                          src="/GuvenilirSiteler/BRGif.gif" 
+                          alt="Betroad Logo" 
+                          className="w-[100px] h-[40px] object-contain rounded"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-2 text-center text-white">Betroad</td>
+                    <td className="py-2 text-center">
+                      <a 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        href="https://betroad373.com/tr"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-md inline-block transition-colors"
+                      >
+                        Kayıt Ol
+                      </a>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-purple-500/20">
+                    <td className="py-2 text-center">
+                      <div className="flex justify-center">
+                        <img 
+                          src="https://www.xyzsports238.xyz/assets/images/fgh/rdssnlg.gif" 
+                          alt="Radisson Logo" 
+                          className="w-[100px] h-[40px] object-contain rounded"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-2 text-center text-white">Radisson</td>
+                    <td className="py-2 text-center">
+                      <a 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        href="https://shortdigest.click/rb107"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-md inline-block transition-colors"
+                      >
+                        Kayıt Ol
+                      </a>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-purple-500/20">
+                    <td className="py-2 text-center">
+                      <div className="flex justify-center">
+                        <img 
+                          src="https://www.xyzsports238.xyz/assets/images/fgh/mxwnlg.gif" 
+                          alt="Maxwin Logo" 
+                          className="w-[100px] h-[40px] object-contain rounded"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-2 text-center text-white">Maxwin</td>
+                    <td className="py-2 text-center">
+                      <a 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        href="https://maxwin448.com/?btag=2347_2615"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-md inline-block transition-colors"
+                      >
+                        Kayıt Ol
+                      </a>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-purple-500/20">
+                    <td className="py-2 text-center">
+                      <div className="flex justify-center">
+                        <img 
+                          src="/GuvenilirSiteler/BaGif.gif" 
+                          alt="Bahis Logo" 
+                          className="w-[100px] h-[40px] object-contain rounded"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-2 text-center text-white">BahisAl</td>
+                    <td className="py-2 text-center">
+                      <a 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        href="https://bahisal853.com/"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-md inline-block transition-colors"
+                      >
+                        Kayıt Ol
+                      </a>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-purple-500/20">
+                    <td className="py-2 text-center">
+                      <div className="flex justify-center">
+                        <img 
+                          src="/GuvenilirSiteler/B10.jpg" 
+                          alt="Bets10 Logo" 
+                          className="w-[100px] h-[40px] object-contain rounded"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-2 text-center text-white">Bets10</td>
+                    <td className="py-2 text-center">
+                      <a 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        href="https://www.1328bets10.com/tr"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-md inline-block transition-colors"
+                      >
+                        Kayıt Ol
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 text-center">
+                      <div className="flex justify-center">
+                        <img 
+                          src="https://www.xyzsports238.xyz/assets/images/fgh/gplg.gif" 
+                          alt="Grandpasha Logo" 
+                          className="w-[100px] h-[40px] object-contain rounded"
+                />
+              </div>
+                    </td>
+                    <td className="py-2 text-center text-white">Grandpasha</td>
+                    <td className="py-2 text-center">
+                      <a 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        href="https://shorteleven.online/syqx"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-md inline-block transition-colors"
+                      >
+                        Kayıt Ol
+                      </a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Video Player Container */}
+          <div className={`md:col-span-6 video-player-section ${isCustomFullscreen ? 'custom-fullscreen-active' : ''}`}
+               ref={playerContainerRef}>
+            
+            <div className="grid grid-cols-1 gap-4">
+              {/* First Player - always visible */}
+              {!isMultiScreen && (
+                <div className="w-full bg-black rounded-xl overflow-hidden border border-purple-900/20 shadow-2xl shadow-purple-500/5 relative">
+                <div className="mobile-player">
+                  <iframe 
+                    src={getPlayerUrl(currentChannel)}
+                    className="absolute top-0 left-0 w-full h-full"
+                    allowFullScreen
+                  ></iframe>
+                  </div>
+                </div>
+              )}
+              
+              {/* Multiple Players in grid layout */}
+              {isMultiScreen && (
+                <div className="flex flex-col gap-3">
+                  {/* Kanal Seçim Bilgisi */}
+                  <div className="inline-flex bg-gray-900/70 backdrop-blur-sm rounded-lg border border-purple-500/20 px-2 py-1 w-fit">
+                    <div className="text-sm text-white whitespace-nowrap">
+                      <span className="font-bold text-purple-400">{activeChannels.length}</span> / <span className="font-bold">3</span> kanal seçildi
+                    </div>
+                  </div>
+                  
+                  {/* Kanallar */}
+                  {activeChannels.map((channelId, index) => (
+                    <div key={index} className="w-full bg-black rounded-xl overflow-hidden border border-purple-900/20 shadow-2xl shadow-purple-500/5 relative">
+                  <div className="mobile-player">
+                    <iframe 
+                          src={getPlayerUrl(channelId)}
+                      className="absolute top-0 left-0 w-full h-full"
+                      allowFullScreen
+                    ></iframe>
+                      </div>
+                      <button 
+                        onClick={() => setActiveChannels(activeChannels.filter(ch => ch !== channelId))}
+                        className="absolute top-3 right-3 bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white rounded-full w-8 h-8 flex items-center justify-center z-10 shadow-lg border border-white/30 transition-all transform hover:scale-110"
+                      >
+                        ×
+                      </button>
+                  </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile View - Matches Section AFTER Video */}
+            <div className="block md:hidden mt-4 mb-4">
+              <div className="matches-container rounded-2xl p-3 relative overflow-hidden" style={{
+                backgroundColor: 'rgba(13, 15, 29, 0.5)',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3 text-purple-400" />
+                    <h2 className="text-sm font-bold holographic-text">Günün Maçları</h2>
+                  </div>
+                  <button 
+                    onClick={toggleMultiScreen}
+                    className={`${
+                      isMultiScreen 
+                        ? 'bg-pink-600 hover:bg-pink-700' 
+                        : 'bg-gradient-to-r from-purple-500 via-purple-600 to-pink-500 hover:from-purple-600 hover:via-purple-700 hover:to-pink-600'
+                    } text-white px-2 py-0.5 rounded-full text-xs font-medium transition-all shadow-lg shadow-purple-500/20 flex items-center gap-1`}
+                  >
+                    <Layers className="h-3 w-3" />
+                    {isMultiScreen ? 'Tek Ekran' : 'Çoklu Ekran'}
+                  </button>
+                </div>
+
+                <div className="max-h-[220px] overflow-y-auto pr-1 matches-scroll" id="mobile-matches-bottom">
+                  {matches.map((match, index) => (
+                    <div 
+                      key={index} 
+                      onClick={() => loadMobileChannel(match.channelId)}
+                      className={`match-card relative rounded-lg p-1.5 cursor-pointer transition-all overflow-hidden neon-border mb-1.5 ${
+                        (isMultiScreen && activeChannels.includes(match.channelId)) || (!isMultiScreen && match.channelId === currentChannel)
+                          ? 'bg-purple-500/20' 
+                          : ''
+                      }`}
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)'
+                      }}
+                    >
+                      <div className="flex items-center">
+                        <div className="w-6 h-6 flex-shrink-0 mr-1.5 rounded-full bg-gray-800/50 flex items-center justify-center overflow-hidden">
+                          {match.homeTeamLogo ? (
+                            <img 
+                              src={match.homeTeamLogo || `https://img.sporekrani.com/teams/default-team.png`}
+                              alt={match.teams.split('-')[0].trim()} 
+                              className="w-5 h-5 object-contain" 
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="text-[10px] text-white font-bold">
+                              {match.teams.split('-')[0].trim().substring(0, 3).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex-1 mx-1">
+                          <div className="flex items-center space-x-1">
+                            <div className={`text-[8px] font-medium ${match.isLive ? 'text-red-400' : 'text-purple-300'} tracking-wider`}>
+                              {match.time} {match.isLive && <span className="ml-1 text-red-400">• CANLI</span>}
+                            </div>
+                            {match.isLive && (
+                              <div className="relative w-1 h-1">
+                                <span className="absolute inset-0 bg-red-500 blur-sm animate-pulse"></span>
+                                <span className="relative w-1 h-1 bg-red-500 rounded-full block animate-pulse"></span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="font-bold text-white text-xs tracking-wide holographic-text line-clamp-1">
+                            {match.teams}
+                          </div>
+                        </div>
+                        
+                        <div className="w-6 h-6 flex-shrink-0 rounded-full bg-gray-800/50 flex items-center justify-center overflow-hidden">
+                          {match.awayTeamLogo ? (
+                            <img 
+                              src={match.awayTeamLogo || `https://img.sporekrani.com/teams/default-team.png`}
+                              alt={match.teams.split('-')[1]?.trim()} 
+                              className="w-5 h-5 object-contain" 
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="text-[10px] text-white font-bold">
+                              {match.teams.split('-')[1]?.trim().substring(0, 3).toUpperCase() || ''}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile View - Güvenilir Bahis Siteleri */}
+            <div className="block md:hidden mt-4 mb-4">
+              <div className="rounded-xl overflow-hidden p-4" style={{
+                backgroundColor: 'rgba(13, 15, 29, 0.5)',
+                backdropFilter: 'blur(10px)'
+              }}>
+                <h3 className="text-center font-bold holographic-text text-lg mb-4">Güvenilir Bahis Siteleri</h3>
+                <div className="space-y-2">
+                  {[
+                    { name: 'Betroad', logo: '/GuvenilirSiteler/BRGif.gif', link: 'https://betroad373.com/tr' },
+                    { name: 'Radisson', logo: 'https://www.xyzsports238.xyz/assets/images/fgh/rdssnlg.gif', link: 'https://shortdigest.click/rb107' },
+                    { name: 'Maxwin', logo: 'https://www.xyzsports238.xyz/assets/images/fgh/mxwnlg.gif', link: 'https://maxwin448.com/?btag=2347_2615' },
+                    { name: 'BahisAl', logo: '/GuvenilirSiteler/BaGif.gif', link: 'https://bahisal853.com/' },
+                    { name: 'Bets10', logo: '/GuvenilirSiteler/B10.jpg', link: 'https://www.1328bets10.com/tr' },
+                    { name: 'Grandpasha', logo: 'https://www.xyzsports238.xyz/assets/images/fgh/gplg.gif', link: 'https://shorteleven.online/syqx' }
+                  ].map((site, index) => (
+                    <div key={index} className="flex items-center justify-between bg-black/20 rounded-lg p-2">
+                      <div className="flex items-center gap-3">
+                        <img src={site.logo} alt={`${site.name} Logo`} className="w-16 h-8 object-contain" />
+                        <span className="text-white font-medium">{site.name}</span>
+                      </div>
+                      <a 
+                        href={site.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded-md transition-colors"
+                      >
+                        Kayıt Ol
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Banners - Flex on Mobile */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mt-6 banners-section banners-grid">
+              {banners.map((banner) => (
+                <a 
+                  key={banner.id}
+                  href="https://www.avrupabet521.com/tr/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full h-[140px] md:h-[193px] rounded-xl overflow-hidden shadow-lg transform hover:scale-[1.02] transition-transform"
+                >
+                  <img 
+                    src={banner.imageUrl}
+                    alt={`Advertisement ${banner.id}`}
+                    className="w-full h-full object-contain"
+                  />
+                </a>
+              ))}
+            </div>
+          </div>
+
+          {/* Matches Section - Hidden on Mobile */}
+          <div className="hidden md:block md:col-span-3 matches-section">
+            <div className="matches-container rounded-2xl p-4 relative overflow-hidden" style={{
+              backgroundColor: 'rgba(13, 15, 29, 0.5)',
+              backdropFilter: 'blur(10px)'
+            }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-purple-400" />
+                  <h2 className="text-base font-bold holographic-text">Günün Maçları</h2>
+                </div>
+                <button 
+                  onClick={toggleMultiScreen}
+                  className={`${
+                    isMultiScreen 
+                      ? 'bg-pink-600 hover:bg-pink-700' 
+                      : 'bg-gradient-to-r from-purple-500 via-purple-600 to-pink-500 hover:from-purple-600 hover:via-purple-700 hover:to-pink-600'
+                  } text-white px-2 py-1 rounded-full text-xs font-medium transition-all shadow-lg shadow-purple-500/20 flex items-center gap-1`}
+                >
+                  <Layers className="h-3 w-3" />
+                  {isMultiScreen ? 'Tek Ekran' : 'Çoklu Ekran'}
+                </button>
+              </div>
+
+              <div className="max-h-[80vh] overflow-y-auto pr-2 matches-scroll" id="desktop-matches">
+                {matches.map((match, index) => (
+                  <div 
+                    key={index} 
+                    onClick={() => loadMobileChannel(match.channelId)}
+                    className={`match-card relative rounded-lg p-2 cursor-pointer transition-all overflow-hidden neon-border mb-2 ${
+                      (isMultiScreen && activeChannels.includes(match.channelId)) || (!isMultiScreen && match.channelId === currentChannel)
+                        ? 'bg-purple-500/20' 
+                        : ''
+                    }`}
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)'
+                    }}
+                  >
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 flex-shrink-0 mr-2 rounded-full bg-gray-800/50 flex items-center justify-center overflow-hidden">
+                        {match.homeTeamLogo ? (
+                          <img 
+                            src={match.homeTeamLogo || `https://img.sporekrani.com/teams/default-team.png`}
+                            alt={match.teams.split('-')[0].trim()} 
+                            className="w-6 h-6 object-contain" 
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="text-xs text-white font-bold">
+                            {match.teams.split('-')[0].trim().substring(0, 3).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-1">
+                          <div className={`text-[10px] font-medium ${match.isLive ? 'text-red-400' : 'text-purple-300'} tracking-wider`}>
+                            {match.time} {match.isLive && <span className="ml-1 text-red-400">• CANLI</span>}
+                          </div>
+                          {match.isLive && (
+                            <div className="relative w-1.5 h-1.5">
+                              <span className="absolute inset-0 bg-red-500 blur-sm animate-pulse"></span>
+                              <span className="relative w-1.5 h-1.5 bg-red-500 rounded-full block animate-pulse"></span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5 mb-0.5">
+                          {match.event || 'Süper Lig'}
+                        </div>
+                        <div className="font-bold text-white text-sm tracking-wide holographic-text">
+                          {match.teams}
+                    </div>
+                      </div>
+                      
+                      <div className="w-8 h-8 flex-shrink-0 ml-2 rounded-full bg-gray-800/50 flex items-center justify-center overflow-hidden">
+                        {match.awayTeamLogo ? (
+                          <img 
+                            src={match.awayTeamLogo || `https://img.sporekrani.com/teams/default-team.png`}
+                            alt={match.teams.split('-')[1]?.trim()} 
+                            className="w-6 h-6 object-contain" 
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="text-xs text-white font-bold">
+                            {match.teams.split('-')[1]?.trim().substring(0, 3).toUpperCase() || ''}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/amdin" element={<AdminLogin />} />
+        <Route path="/amdin/dashboard" element={<AdminDashboard />} />
+        <Route path="/" element={<MainContent />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;

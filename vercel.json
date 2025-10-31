@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/amdin", "destination": "/index.html" },
+    { "source": "/amdin/:path*", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+} 

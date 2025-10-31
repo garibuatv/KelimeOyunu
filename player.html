@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canlı Yayın - FutSmart</title>
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <style>
+        /* Sayfa Stili */
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Video Konteyneri */
+        .video-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        /* Video Oynatıcı */
+        .video-js {
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16/9;
+        }
+
+        /* Başlık */
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        /* Durum Mesajı */
+        #status {
+            text-align: center;
+            margin-top: 10px;
+            padding: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="video-container">
+        <h1>FutSmart Canlı Yayın</h1>
+        <video id="player" 
+               class="video-js vjs-default-skin" 
+               controls 
+               preload="auto" 
+               playsinline>
+            <source src="" type="application/x-mpegURL" id="videoSource">
+            <p class="vjs-no-js">
+                Video oynatıcı yüklenemedi. Lütfen JavaScript'i etkinleştirin.
+            </p>
+        </video>
+        <div id="status">Yayın bağlantısı kuruluyor...</div>
+    </div>
+
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+    <script>
+        // IP adresini al ve video kaynağını ayarla
+        fetch('https://api.ipify.org?format=json')
+            .then(response => response.json())
+            .then(data => {
+                const ip = data.ip;
+                const videoSource = document.getElementById('videoSource');
+                videoSource.src = `http://${ip}:8080/hls/test.m3u8`;
+                
+                // Video oynatıcıyı başlat
+                var player = videojs('player', {
+                    fluid: true,
+                    liveui: true,
+                    html5: {
+                        hls: {
+                            enableLowInitialPlaylist: true,
+                            smoothQualityChange: true,
+                            overrideNative: true
+                        }
+                    }
+                });
+
+                player.on('error', function() {
+                    document.getElementById('status').innerHTML = 'Yayın şu anda aktif değil.';
+                });
+
+                player.on('playing', function() {
+                    document.getElementById('status').innerHTML = 'Yayın başladı!';
+                });
+            })
+            .catch(error => {
+                document.getElementById('status').innerHTML = 'Yayın bağlantısı kurulamadı.';
+                console.error('IP adresi alınamadı:', error);
+            });
+    </script>
+</body>
+</html> 
